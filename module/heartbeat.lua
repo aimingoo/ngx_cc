@@ -6,7 +6,7 @@ local function apply(invoke)
 		if cluster.worker_initiated then
 			route.cc('/_/invoke', { direction='super', args={reportHubPort=cluster.master.port} })
 			if cluster.report_clients then
-				route.cc('/_/invoke', { direction='workers', args={reportMeAgain2=true} })
+				route.cc('/_/invoke', { direction='workers', args={heartbeat2=true} })
 			end
 		end
 	end
