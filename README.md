@@ -28,7 +28,7 @@ Requirements:
 * lua-process module (macosx only)
 
 #### 1) install nginx+lua
-OpenResty is commented(here)，or install nginx+lua, see:
+OpenResty is commented([here](http://openresty.org/))，or install nginx+lua, see:
 > [http://wiki.nginx.org/HttpLuaModule#Installation](http://wiki.nginx.org/HttpLuaModule#Installation)
 
 #### 2) install per-worker-listener patch
@@ -525,7 +525,7 @@ the 'url' parament include pattens:
 '/_/cast/ding'        : a remote call with uri '/ding', and target service will boardcast the message.
 '/_/_/test/invokeXXX' : a sub-channel 'XXX' invoke at 'test' channel
 ```
-the 'opt' parament see: ngx_cc.optionAgain
+the 'opt' parament see: [ngx_cc.optionAgain](https://github.com/aimingoo/ngx_cc/blob/master/README.md#-ngx_ccoptionagain-and-ngx_ccoptionagain2)
 
 if you want send 'AAA' as action_name for all 'workers', the communication implement by these codes:
 ```lua
