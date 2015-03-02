@@ -5,7 +5,7 @@ The chinese intro document at here: [chinese wiki](https://github.com/aimingoo/n
 
 The framework support:
 > * communication between cluster nodes and worker processes, with directions: super/clients, master/workers
-> * native coroutined ngx.location.capture* based
+> * native ngx.location.capture* based, support coroutine sub-request
 >  * without cosocket (not dependent)
 > * multi channels and sub-channels supported
 > * multi-root or cross-cluster communication supported
