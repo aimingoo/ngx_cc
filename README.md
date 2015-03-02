@@ -149,7 +149,7 @@ This is base demo for a simple cluster.
 ```
 OK, now, you will get a cluster with next topology:
 
-[[images/cluster_arch_4.png]]
+[[wiki/images/cluster_arch_4.png]]
 
 3) and, more changes(clients for a client)
 ```bash
