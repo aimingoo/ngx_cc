@@ -3,16 +3,23 @@ A framework of Nginx Communication Cluster. reliable dispatch/translation messag
 
 The chinese intro document at here: [chinese wiki](https://github.com/aimingoo/ngx_cc/wiki/%E7%AE%80%E4%BB%8B).
 
+The framework support:
+> * communication between cluster nodes and worker processes, with directions: super/clients, master/workers
+> * native coroutined ngx.location.capture* based
+>  * without cosocket (not dependent)
+> * multi channels and sub-channels supported
+> * multi-root or cross-cluster communication supported
+
 The contents of current document:
-> * environment
-> * run testcase with ngx_cc
-> * build cluster configures
-> * programming
-> * APIs
->  * modules in the framework
->  * locations in nginx.conf
->  * ngx_cc APIs
->  * route APIs
+> * [environment](ngx_cc#environment)
+> * [run testcase with ngx_cc](ngx_cc#run-testcase-with-ngx_cc)
+> * [build cluster configures](ngx_cc#build-cluster-configures)
+> * [programming](ngx_cc#programming-with-ngx_cc)
+> * [APIs](ngx_cc#apis)
+>  * [modules in the framework](ngx_cc#modules-in-the-framework)
+>  * [locations in nginx.conf](ngx_cc#locations-in-nginxconf)
+>  * [ngx_cc APIs](ngx_cc#ngx_cc-apis)
+>  * [route APIs](ngx_cc#route-apis)
 
 ## environment
 Requirements:
