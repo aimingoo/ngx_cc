@@ -147,7 +147,9 @@ This is base demo for a simple cluster.
 > sudo ./nginx -c ~/work/ngx_cc/nginx.conf.1
 > sudo ./nginx -c ~/work/ngx_cc/nginx.conf.2
 ```
-OK, now, you will get a cluster with next topology: [here](wiki/images/cluster_arch_4.png)
+OK, now, you will get a cluster with next topology: [here](/aimingoo/ngx_cc/wiki/images/cluster_arch_4.png)
+
+[[/aimingoo/ngx_cc/wiki/images/cluster_arch_4.png]]
 
 3) and, more changes(clients for a client)
 ```bash
