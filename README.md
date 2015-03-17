@@ -11,15 +11,15 @@ The framework support:
 > * multi-root or cross-cluster communication supported
 
 The contents of current document:
-> * [environment](ngx_cc#environment)
-> * [run testcase with ngx_cc](ngx_cc#run-testcase-with-ngx_cc)
-> * [build cluster configures](ngx_cc#build-cluster-configures)
-> * [programming](ngx_cc#programming-with-ngx_cc)
-> * [APIs](ngx_cc#apis)
->  * [modules in the framework](ngx_cc#modules-in-the-framework)
->  * [locations in nginx.conf](ngx_cc#locations-in-nginxconf)
->  * [ngx_cc APIs](ngx_cc#ngx_cc-apis)
->  * [route APIs](ngx_cc#route-apis)
+> * [environment](#environment)
+> * [run testcase with ngx_cc](#run-testcase-with-ngx_cc)
+> * [build cluster configures](#build-cluster-configures)
+> * [programming](#programming-with-ngx_cc)
+> * [APIs](#apis)
+>  * [modules in the framework](#modules-in-the-framework)
+>  * [locations in nginx.conf](#locations-in-nginxconf)
+>  * [ngx_cc APIs](#ngx_cc-apis)
+>  * [route APIs](#route-apis)
 
 ## environment
 Requirements:
