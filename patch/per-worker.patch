@@ -1,0 +1,226 @@
+diff -Naur ./nginx-1.7.7.orig/src/core/ngx_connection.c ./nginx-1.7.7/src/core/ngx_connection.c
+--- ./nginx-1.7.7.orig/src/core/ngx_connection.c	2014-10-28 23:04:47.000000000 +0800
++++ ./nginx-1.7.7/src/core/ngx_connection.c	2015-05-28 03:04:54.000000000 +0800
+@@ -8,6 +8,7 @@
+ #include <ngx_config.h>
+ #include <ngx_core.h>
+ #include <ngx_event.h>
++#include <nginx.h>
+ 
+ 
+ ngx_os_io_t  ngx_io;
+@@ -305,11 +306,19 @@
+ ngx_open_listening_sockets(ngx_cycle_t *cycle)
+ {
+     int               reuseaddr;
+-    ngx_uint_t        i, tries, failed;
++    ngx_uint_t        i, tries, failed, jumper;
+     ngx_err_t         err;
+     ngx_log_t        *log;
+     ngx_socket_t      s;
+     ngx_listening_t  *ls;
++    ngx_core_conf_t  *ccf;
++
++    size_t                len;
++    struct sockaddr      *sockaddr;
++    struct sockaddr_in   *sin;
++#if (NGX_HAVE_INET6)
++    struct sockaddr_in6  *sin6;
++#endif
+ 
+     reuseaddr = 1;
+ #if (NGX_SUPPRESS_WARN)
+@@ -317,6 +326,8 @@
+ #endif
+ 
+     log = cycle->log;
++    ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
++    jumper = 0;
+ 
+     /* TODO: configurable try number */
+ 
+@@ -336,6 +347,60 @@
+                 continue;
+             }
+ 
++            sockaddr = ls[i].sockaddr;
++
++            if (ngx_process == NGX_PROCESS_WORKER) {
++
++                if (!ls[i].per_worker) {
++                    continue;
++                }
++
++                sockaddr = ngx_palloc(cycle->pool, ls[i].socklen);
++                if (sockaddr == NULL) {
++                    return NGX_ERROR;
++                }
++
++                ngx_memcpy(sockaddr, ls[i].sockaddr, ls[i].socklen);
++
++                switch (ls[i].sockaddr->sa_family) {
++#if (NGX_HAVE_INET6)
++                    case AF_INET6:
++                        sin6 = (struct sockaddr_in6 *) sockaddr;
++                        sin6->sin6_port = htons(ntohs(sin6->sin6_port) + jumper +
++                                          ngx_worker_slot);
++                        ngx_server_port = ntohs(sin->sin_port);
++                        break;
++#endif
++                    default: /* AF_INET */
++                        sin = (struct sockaddr_in *) sockaddr;
++                        sin->sin_port = htons(ntohs(sin->sin_port) + jumper +
++                                        ngx_worker_slot);
++                        ngx_server_port = ntohs(sin->sin_port);
++                }
++
++                jumper += ccf->worker_processes;
++                len = ls[i].addr_text_max_len;
++                ls[i].addr_text.data = ngx_palloc(cycle->pool, len);
++
++                if (ls[i].addr_text.data == NULL) {
++                    return NGX_ERROR;
++                }
++
++                len = ngx_sock_ntop(sockaddr,
++#if (nginx_version >= 1005003)
++				    ls[i].socklen,
++#endif
++				    ls[i].addr_text.data, len, 1);
++                if (len == 0) {
++                    return NGX_ERROR;
++                }
++
++                ls[i].addr_text.len = len;
++
++            } else if (ls[i].per_worker) {
++                continue;
++            }
++
+             if (ls[i].inherited) {
+ 
+                 /* TODO: close on exit */
+@@ -408,7 +473,7 @@
+             ngx_log_debug2(NGX_LOG_DEBUG_CORE, log, 0,
+                            "bind() %V #%d ", &ls[i].addr_text, s);
+ 
+-            if (bind(s, ls[i].sockaddr, ls[i].socklen) == -1) {
++            if (bind(s, sockaddr, ls[i].socklen) == -1) {
+                 err = ngx_socket_errno;
+ 
+                 if (err != NGX_EADDRINUSE || !ngx_test_config) {
+diff -Naur ./nginx-1.7.7.orig/src/core/ngx_connection.h ./nginx-1.7.7/src/core/ngx_connection.h
+--- ./nginx-1.7.7.orig/src/core/ngx_connection.h	2014-10-28 23:04:47.000000000 +0800
++++ ./nginx-1.7.7/src/core/ngx_connection.h	2015-06-03 01:39:43.000000000 +0800
+@@ -54,6 +54,7 @@
+     unsigned            open:1;
+     unsigned            remain:1;
+     unsigned            ignore:1;
++    unsigned            per_worker:1;
+ 
+     unsigned            bound:1;       /* already bound */
+     unsigned            inherited:1;   /* inherited from previous process */
+diff -Naur ./nginx-1.7.7.orig/src/http/ngx_http.c ./nginx-1.7.7/src/http/ngx_http.c
+--- ./nginx-1.7.7.orig/src/http/ngx_http.c	2014-12-07 09:32:49.000000000 +0800
++++ ./nginx-1.7.7/src/http/ngx_http.c	2015-06-03 01:39:43.000000000 +0800
+@@ -1821,6 +1821,8 @@
+     ls->fastopen = addr->opt.fastopen;
+ #endif
+ 
++    ls->per_worker = addr->opt.per_worker;
++
+     return ls;
+ }
+ 
+diff -Naur ./nginx-1.7.7.orig/src/http/ngx_http_core_module.c ./nginx-1.7.7/src/http/ngx_http_core_module.c
+--- ./nginx-1.7.7.orig/src/http/ngx_http_core_module.c	2014-12-07 09:32:49.000000000 +0800
++++ ./nginx-1.7.7/src/http/ngx_http_core_module.c	2015-06-03 01:39:43.000000000 +0800
+@@ -4061,6 +4061,11 @@
+             continue;
+         }
+ 
++        if (ngx_strcmp(value[n].data, "per_worker") == 0) {
++            lsopt.per_worker = 1;
++            continue;
++        }
++
+ #if (NGX_HAVE_SETFIB)
+         if (ngx_strncmp(value[n].data, "setfib=", 7) == 0) {
+             lsopt.setfib = ngx_atoi(value[n].data + 7, value[n].len - 7);
+diff -Naur ./nginx-1.7.7.orig/src/http/ngx_http_core_module.h ./nginx-1.7.7/src/http/ngx_http_core_module.h
+--- ./nginx-1.7.7.orig/src/http/ngx_http_core_module.h	2014-10-28 23:04:48.000000000 +0800
++++ ./nginx-1.7.7/src/http/ngx_http_core_module.h	2015-06-03 01:39:43.000000000 +0800
+@@ -72,6 +72,7 @@
+     unsigned                   default_server:1;
+     unsigned                   bind:1;
+     unsigned                   wildcard:1;
++    unsigned                   per_worker:1;
+ #if (NGX_HTTP_SSL)
+     unsigned                   ssl:1;
+ #endif
+diff -Naur ./nginx-1.7.7.orig/src/os/unix/ngx_process.c ./nginx-1.7.7/src/os/unix/ngx_process.c
+--- ./nginx-1.7.7.orig/src/os/unix/ngx_process.c	2014-10-28 23:04:49.000000000 +0800
++++ ./nginx-1.7.7/src/os/unix/ngx_process.c	2015-06-03 01:39:43.000000000 +0800
+@@ -34,6 +34,7 @@
+ ngx_socket_t     ngx_channel;
+ ngx_int_t        ngx_last_process;
+ ngx_process_t    ngx_processes[NGX_MAX_PROCESSES];
++ngx_int_t        ngx_worker_slot;
+ 
+ 
+ ngx_signal_t  signals[] = {
+diff -Naur ./nginx-1.7.7.orig/src/os/unix/ngx_process.h ./nginx-1.7.7/src/os/unix/ngx_process.h
+--- ./nginx-1.7.7.orig/src/os/unix/ngx_process.h	2014-10-28 23:04:49.000000000 +0800
++++ ./nginx-1.7.7/src/os/unix/ngx_process.h	2015-06-03 01:39:43.000000000 +0800
+@@ -83,6 +83,7 @@
+ extern ngx_int_t      ngx_process_slot;
+ extern ngx_int_t      ngx_last_process;
+ extern ngx_process_t  ngx_processes[NGX_MAX_PROCESSES];
++extern ngx_int_t      ngx_worker_slot;
+ 
+ 
+ #endif /* _NGX_PROCESS_H_INCLUDED_ */
+diff -Naur ./nginx-1.7.7.orig/src/os/unix/ngx_process_cycle.c ./nginx-1.7.7/src/os/unix/ngx_process_cycle.c
+--- ./nginx-1.7.7.orig/src/os/unix/ngx_process_cycle.c	2014-12-07 09:32:49.000000000 +0800
++++ ./nginx-1.7.7/src/os/unix/ngx_process_cycle.c	2015-06-03 01:39:43.000000000 +0800
+@@ -35,6 +35,7 @@
+ ngx_uint_t    ngx_process;
+ ngx_pid_t     ngx_pid;
+ ngx_uint_t    ngx_threaded;
++ngx_uint_t    ngx_server_port;
+ 
+ sig_atomic_t  ngx_reap;
+ sig_atomic_t  ngx_sigio;
+@@ -743,6 +744,8 @@
+ 
+     ngx_process = NGX_PROCESS_WORKER;
+ 
++    ngx_worker_slot = worker;
++
+     ngx_worker_process_init(cycle, worker);
+ 
+     ngx_setproctitle("worker process");
+@@ -976,6 +979,12 @@
+         ls[i].previous = NULL;
+     }
+ 
++    if (ngx_open_listening_sockets(cycle) != NGX_OK) {
++        ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
++                      "failed to init worker listeners");
++        exit(2);
++    }
++
+     for (i = 0; ngx_modules[i]; i++) {
+         if (ngx_modules[i]->init_process) {
+             if (ngx_modules[i]->init_process(cycle) == NGX_ERROR) {
+diff -Naur ./nginx-1.7.7.orig/src/os/unix/ngx_process_cycle.h ./nginx-1.7.7/src/os/unix/ngx_process_cycle.h
+--- ./nginx-1.7.7.orig/src/os/unix/ngx_process_cycle.h	2014-10-28 23:04:49.000000000 +0800
++++ ./nginx-1.7.7/src/os/unix/ngx_process_cycle.h	2015-06-03 01:39:43.000000000 +0800
+@@ -45,6 +45,7 @@
+ extern ngx_uint_t      ngx_daemonized;
+ extern ngx_uint_t      ngx_threaded;
+ extern ngx_uint_t      ngx_exiting;
++extern ngx_uint_t      ngx_server_port;
+ 
+ extern sig_atomic_t    ngx_reap;
+ extern sig_atomic_t    ngx_sigio;

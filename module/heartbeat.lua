@@ -1,3 +1,5 @@
+local tasks_management = require("lib.ngx_tasks")
+
 local function apply(invoke)
 	-- client heartbeats
 	--	/channel_name/invoke?heartbeat
@@ -23,7 +25,7 @@ end
 return {
 	apply = function(route)
 		-- reset tasks management module
-		local Tasks, meta = require("lib.ngx_tasks"), getmetatable(route.tasks)
+		local Tasks, meta = tasks_management, getmetatable(route.tasks)
 		if not meta or meta.__index ~= Tasks then
 			setmetatable(route.tasks, { __index = Tasks })
 			route.tasks.dict = route.shared

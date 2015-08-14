@@ -1,3 +1,5 @@
+local JSON = require('lib.JSON')
+
 local function apply(invoke)
 	local function HOST(node)
 		return node.host .. ':' .. (node.port or '80')
@@ -6,7 +8,7 @@ local function apply(invoke)
 	-- get services status (with clients deep discovery)
 	--	/channel_name/invoke?getServiceStat
 	invoke.getServiceStat = function(route, channel, arg)
-		local clients, JSON = {}, require('lib.JSON')
+		local clients = {}
 		local r_status, r_resps = route.cc('/_/invoke', route.optionAgain({ direction = 'clients' }))
 		for _, resp in ipairs(r_resps) do
 			clients[resp.client] = (resp.status == ngx.HTTP_OK) and JSON:decode(resp.body) or false;
@@ -23,6 +25,17 @@ local function apply(invoke)
 			routePort = cluster.router.port,
 			clients = clients
 		}))
+		ngx.exit(ngx.HTTP_OK)
+	end
+
+	-- transfer channel's super to new server, invoke and process by per-workers
+	--	/channel_name/invoke?transferServer=ip:port
+	--	1) for per-workers, change instance's cluster.super only
+	invoke.transferServer = function(route, channel, arg)
+		if route.isInvokeAtPer() then
+			route.transfer(arg.transferServer)
+		end
+		ngx.say('Okay.')
 		ngx.exit(ngx.HTTP_OK)
 	end
 

@@ -11,17 +11,17 @@
 ngx_cc = require('ngx_cc')
 
 -- case one: base test
-route = ngx_cc:new('test')	-- work with 'test' channel
+route = ngx_cc:new('test')	-- work at 'test' channel
 require('module.invoke').apply(route)
 
--- case two: full test, with tasks management
-route2 = ngx_cc:new('kada')	-- work with 'kada' channel
-
--- import invoke.lua of route2.invoke
+-- case two: full test, more module/feature to route2.invoke
+--	 1) with sample invokes
+--	 2) with heartbeat (include tasks management)
+--	 3) with cluster invalid checker
+route2 = ngx_cc:new('kada')	-- work at 'kada' channel
 require('module.invoke').apply(route2)
-
--- import heartbeat invokes
 require('module.heartbeat').apply(route2)
+require('module.invalid').apply(route2)
 
 -- custom route2.invoke
 route2.invoke.showMe = function()

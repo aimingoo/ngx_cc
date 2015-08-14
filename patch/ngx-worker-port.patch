@@ -1,0 +1,44 @@
+--- ./ngx_lua-0.9.15.orig/src/ngx_http_lua_worker.c	2015-02-19 07:29:39.000000000 +0800
++++ ./ngx_lua-0.9.15/src/ngx_http_lua_worker.c	2015-06-21 05:19:59.000000000 +0800
+@@ -15,6 +15,7 @@
+ 
+ static int ngx_http_lua_ngx_worker_exiting(lua_State *L);
+ static int ngx_http_lua_ngx_worker_pid(lua_State *L);
++static int ngx_http_lua_ngx_worker_port(lua_State *L);
+ 
+ 
+ void
+@@ -28,6 +29,9 @@
+     lua_pushcfunction(L, ngx_http_lua_ngx_worker_pid);
+     lua_setfield(L, -2, "pid");
+ 
++    lua_pushcfunction(L, ngx_http_lua_ngx_worker_port);
++    lua_setfield(L, -2, "port");
++
+     lua_setfield(L, -2, "worker");
+ }
+ 
+@@ -47,6 +51,12 @@
+     return 1;
+ }
+ 
++static int
++ngx_http_lua_ngx_worker_port(lua_State *L)
++{
++    lua_pushinteger(L, (lua_Integer) ngx_server_port);
++    return 1;
++}
+ 
+ #ifndef NGX_LUA_NO_FFI_API
+ int
+@@ -61,4 +71,10 @@
+ {
+     return (int) ngx_exiting;
+ }
++
++int
++ngx_http_lua_ffi_worker_port(void)
++{
++    return (int) ngx_server_port;
++}
+ #endif
