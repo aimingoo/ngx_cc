@@ -8,20 +8,28 @@ local function apply(invoke)
 	-- get services status (with clients deep discovery)
 	--	/channel_name/invoke?getServiceStat
 	invoke.getServiceStat = function(route, channel, arg)
-		local clients = {}
-		local r_status, r_resps = route.cc('/_/invoke', route.optionAgain({ direction = 'clients' }))
-		for _, resp in ipairs(r_resps) do
-			clients[resp.client] = (resp.status == ngx.HTTP_OK) and JSON:decode(resp.body) or false;
-			if clients[resp.client] then
-				clients[resp.client].service = resp.client
+		local clients
+		if not arg.selfOnly then
+			local r_status, r_resps = route.cc('/_/invoke', route.optionAgain({ direction = 'clients' }))
+			clients = {}
+			for _, resp in ipairs(r_resps) do
+				if (resp.status == ngx.HTTP_OK) then
+					local ok, result = pcall(JSON.decode, resp.body)
+					clients[resp.client] = ok and result or
+						{ super = '-', ports = '-', routePort = '-', clients = {} }
+				end
+				if clients[resp.client] then
+					clients[resp.client].service = resp.client
+				end
 			end
 		end
 
-		local shared, cluster, key = route.shared, route.cluster, 'ngx_cc.registed.workers'
-		ngx.say(JSON:encode({
+		local key_registed_workers = 'ngx_cc.'..channel..'.registed.workers'
+		local shared, cluster = route.shared, route.cluster
+		ngx.say(JSON.encode({
 			super = (not route.isRoot()) and HOST(cluster.super) or nil,
 			service = HOST(cluster.master),
-			ports = shared:get(key),
+			ports = shared:get(key_registed_workers),
 			routePort = cluster.router.port,
 			clients = clients
 		}))
