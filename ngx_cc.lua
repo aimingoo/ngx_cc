@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
--- NGX_CC v2.0.0
+-- NGX_CC v2.1.0
 -- Author: aimingoo@wandoujia.com
--- Copyright (c) 2015.02-2015.08
+-- Copyright (c) 2015.02-2015.10
 -- Descition:　a framework of Nginx Communication Cluster. reliable
 --	dispatch/translation　messages in nginx nodes and processes.
 --
@@ -21,6 +21,7 @@
 --	ngx_cc.channels
 --
 -- History:
+--	2015.10.22	release v2.1.0, publish NGX_CC node as N4C resources
 --	2015.08.13	release v2.0.0, support NGX_4C programming architecture
 --	2015.02		release v1.0.0
 -----------------------------------------------------------------------------
@@ -33,7 +34,15 @@ end
 -- core methods
 local ngx_cc_core = require('module.ngx_cc_core')
 
+-- with status >= 200 (ngx.HTTP_OK) and status < 300 (ngx.HTTP_SPECIAL_RESPONSE) for successful quits
+--	*) see: https://www.nginx.com/resources/wiki/modules/lua/#ngx-exit
+local HTTP_SUCCESS = function(status)
+	return status >= 200 and status < 300
+end
+
 -- route framework
+local n4c_supported = false
+local channel_resources = {}
 local R = {
 	tasks = {},
 	channels = {},
@@ -119,7 +128,7 @@ local R = {
 				}, {__index=opt});
 
 				local resp = ngx.location.capture(uri2, opt2);
-				r_status = resp.status == ngx.HTTP_OK
+				r_status = HTTP_SUCCESS(resp.status)
 				r_resps = { resp }
 
 				if r_status then
@@ -145,7 +154,7 @@ local R = {
 				}, {__index=opt})
 
 				local resp = ngx.location.capture(uri2, opt2)
-				r_status = resp.status == ngx.HTTP_OK
+				r_status = HTTP_SUCCESS(resp.status)
 				r_resps = { resp }
 
 				if r_status then
@@ -160,9 +169,9 @@ local R = {
 				-- local fmt = 'Cast from port %s to super, ' .. (r_status and 'done.' or 'error with status %d.')
 				-- ngx_log(ngx.INFO, string.format(fmt, cluster.worker.port, resp.status))
 			elseif opt.direction == 'workers' then
-				local reqs, ports, registedWorkers = {}, {}, instance.shared:get(key_registed_workers) or ''
-				local ctx2 = { cc_headers = nil } -- the <nil> will reset to default 'ON'
-				for port, opt2 in string.gmatch(registedWorkers, '(%d+),?') do
+				local reqs, ports, registed_ports = {}, {}, channel_resources[key_registed_workers] or {}
+				local ctx2, opt2 = { cc_headers = nil } -- the <nil> will reset to default 'ON'
+				for _, port in ipairs(registed_ports) do
 					opt2 = setmetatable({
 						vars = {
 							cc_host = cluster.master.host,
@@ -179,7 +188,7 @@ local R = {
 					for i, resp, key in ipairs(resps) do
 						resp.port = ports[i]
 						key = cluster.master.host .. ':' .. resp.port
-						if resp.status ~= ngx.HTTP_OK then
+						if not HTTP_SUCCESS(resp.status) then
 							table.insert(errPorts, ports[i])
 							table.insert(errRequests, {instance.cc, '/_/invoke',
 								{ direction='master', args={invalidWorker=ports[i], t=invalid[key]} }})
@@ -196,9 +205,10 @@ local R = {
 					-- ngx_log(ngx.INFO, string.format(fmt, cluster.worker.port, #reqs, #resps, table.concat(errPorts, ',')))
 				end
 			elseif opt.direction == 'clients' then
-				local reqs, clients, registedClients = {}, {}, instance.shared:get(key_registed_clients) or ''
-				local ctx2 = { cc_headers = nil } -- the <nil> will reset to default 'ON'
-				for client, port, opt2 in string.gmatch(registedClients, '([^:,]+)([^,]*),?') do
+				local reqs, clients, registed_clients = {}, {}, channel_resources[key_registed_clients] or {}
+				local ctx2, opt2 = { cc_headers = nil } -- the <nil> will reset to default 'ON'
+				for _, client in ipairs(registed_clients) do
+					local client, port = unpack(client)
 					opt2 = setmetatable({
 						vars = {
 							cc_host = client,
@@ -215,7 +225,7 @@ local R = {
 					for i, resp, key in ipairs(resps) do
 						resp.client = clients[i]
 						key = resp.client
-						if resp.status ~= ngx.HTTP_OK then
+						if not HTTP_SUCCESS(resp.status) then
 							table.insert(errClients, clients[i])
 							table.insert(errRequests, {instance.cc, '/_/invoke',
 								{ direction='master', args={invalidClient=clients[i], t=invalid[key]} }})
@@ -272,7 +282,7 @@ local R = {
 
 		-- reset super
 		instance.transfer = function(super, ...)
-			local host, port = string.match(super, '^[^/]*//([^:]+):?(.*)')
+			local host, port = string.match(super, '([^/:]*):?(%d*)$')
 			cluster.super.host, cluster.super.port = host, port or ({...})[1] or '80'
 		end
 
@@ -319,7 +329,7 @@ end
 function R.self(url, opt)
 	local resp = ngx.location.capture(url, opt);
 	-- ngx_log(ngx.INFO, 'Cast to self: ' .. (r_status and 'done.' or 'and no passed.'))
-	return resp.status == ngx.HTTP_OK, { resp }
+	return HTTP_SUCCESS(resp.status), { resp }
 end
 
 -- cast to remote, RPC
@@ -328,24 +338,24 @@ function R.remote(url, opt)
 	local uri = string.sub(url, string.len(addr or '')+1)
 	assert(addr, 'need full remote url')
 	local uri2, host, port = '/_/cast' .. uri, string.match(addr, '^[^/]*//([^:]+):?(.*)')
-	local ctx2 = { cc_headers = 'OFF' }
+	local ctx, ctx2 = opt and opt.ctx or nil, { cc_headers = 'OFF' }
 	local resp = ngx.location.capture(uri2, setmetatable({
 		vars = {
 			cc_host = host,
 			cc_port = port,
 		},
-		ctx = not opt.ctx and ctx2 or (not opt.ctx.cc_headers and setmetatable(ctx2, { __index = opt.ctx })) or nil,
+		ctx = not ctx and ctx2 or (not ctx.cc_headers and setmetatable(ctx2, { __index = ctx })) or nil,
 	}, {__index=opt}));
 	-- local fmt = 'Cast from port %s to remote: %s, ' .. (r_status and 'done.' or 'error with status %d.')
 	-- ngx_log(ngx.INFO, string.format(fmt, cluster.worker.port, addr, resp.status))
-	return resp.status == ngx.HTTP_OK, { resp }
+	return HTTP_SUCCESS(resp.status), { resp }
 end
 
 -- simple say() all responses body for R.cc() result
 function R.say(r_status, r_resps)
 	for _, resp in ipairs(r_resps) do
 		if resp then -- false value, or a resp object
-			if ((resp.status == ngx.HTTP_OK) and (type(resp.body) == 'string') and
+			if (HTTP_SUCCESS(resp.status) and (type(resp.body) == 'string') and
 				(string.len(resp.body) > 0)) then
 				ngx.say(resp.body)
 			end
@@ -417,17 +427,17 @@ function R.transfer(super, channels, clients)
 	local clients = clients == '*' and {} or maped(split(clients))
 	local forAll, requests, opt = isEmpty(clients), {}, { args={transferServer=super} }
 	for channel in pairs(channels) do
-		local saved, route, key_registed_clients = {}, R.channels[channel], 'ngx_cc.'..channel..'.registed.clients'
-		local registedClients = route.shared:get(key_registed_clients)
-		for client, port in string.gmatch(registedClients, '([^:,]+)([^,]*),?') do
+		local saved, instance, key_registed_clients = {}, R.channels[channel], 'ngx_cc.'..channel..'.registed.clients'
+		local iterator = channel_resources[key_registed_clients] or {}
+		for client, port in unpack(iterator) do
 			if forAll or clients[client] then
-				table.insert(requests, {route.remote, 'http://'..client..port..'/'..channel..'/invoke', opt})
+				table.insert(requests, {instance.remote, 'http://'..client..port..'/'..channel..'/invoke', opt})
 			else
 				table.insert(saved, client..port)
 			end
 		end
 		-- saving
-		route.shared:set(key_registed_clients, table.concat(saved, ','))
+		instance.shared:set(key_registed_clients, table.concat(saved, ','))
 	end
 	-- remote call these removed clients
 	R.all(requests)
@@ -463,11 +473,41 @@ function R.invokes(channel, master_only)
 	-- ngx.log(ngx.INFO, table.concat({'', channel, ngx.var.cc_host, ngx.var.cc_port, ''}, '||'))
 end
 
+-- for n4c architecture
+if n4c_supported then
+	-- for n4c only, removing in init_worker.lua
+	R.resources = channel_resources
+else
+	-- reosure getter for native ngx_cc, direct read shared dictionary
+	-- 	*) saving iterator of worker/clients direction, uses unpack(iterator) to got values by caller
+	local registed_keys = {}
+	setmetatable(channel_resources, {__index = function(t, key)
+		local channel, direction = unpack(registed_keys[key] or {false})
+		if channel == false then
+			local ngx_cc_registed_key = '^ngx_cc%.([^%.]+)%.registed%.([^%.]+)$'
+			channel, direction = string.match(key, ngx_cc_registed_key)
+			registed_keys[key] = {channel, direction}
+		end
+
+		local instance = channel and direction and R.channels[channel]
+		if instance and (direction == 'workers' or direction == 'clients') then
+			local registed, newValue = instance.shared:get(key), {}
+			if direction == 'workers' then
+				for port in string.gmatch(registed, '(%d+)[^,]*,?') do table.insert(newValue, port) end
+			elseif direction == 'clients' then
+				for host, port in string.gmatch(registed, '([^:,]+)([^,]*),?') do table.insert(newValue, {host, port}) end
+			end
+			return newValue
+		end
+	end})
+end
+
 -- base struct for multi-workers sub-system
 R.cluster = {
 	super =  { host='127.0.0.1', port='80' },	-- cc:super
 	master = { host='127.0.0.1' },				-- cc:workers, use <master.host> and communication in workes only
 	dict = 'ngxcc_dict',						-- default cluster/global dictionry name
+	-- report_clients = false,						-- non implement
 }
 -- current worker
 R.cluster.worker = {

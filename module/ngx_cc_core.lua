@@ -39,17 +39,25 @@ end
 -- register current worker on master
 --	/channel_name/invoke?registerWorker
 local function registerWorker(route, channel, arg)
-	local shared = route.shared
+	local shared, cluster = route.shared, route.cluster
 	local key_registed_workers = 'ngx_cc.'..channel..'.registed.workers'
 	local registedWorkers = shared:get(key_registed_workers)
 
-	local workers = { arg.registerWorker or 80 }
+	local worker_port = arg.registerWorker or '80'
+	local workers = { worker_port .. '/' .. arg.pid }
 	if not registedWorkers then
 		shared:add(key_registed_workers, workers[1])
-	else -- dedup and save
-		for port in string.gmatch(registedWorkers, "(%d+),?") do
-			if port ~= workers[1] then
-				table.insert(workers, port)
+	else -- dedup and save, check valid for per worker process
+		local ps, master_pid = require('lib.posix'), tonumber(cluster.master.pid)
+		local function is_valid_workerprocess(pid)
+			return ps.pgid(tonumber(pid)) == master_pid  -- pgid is '-1' or pid of master process
+		end
+		for worker in string.gmatch(registedWorkers, "([^,]+),?") do
+			if (worker ~= workers[1]) then
+				local pid = string.match(worker, '%d+$')
+				if is_valid_workerprocess(pid) then
+					table.insert(workers, worker)
+				end
 			end
 		end
 		shared:set(key_registed_workers, table.concat(workers, ','))
@@ -112,7 +120,7 @@ local manual_initializer = function(route, channel, options)
 	-- try register RouterPort
 	local shared, key = route.shared, 'ngx_cc.'..channel..'.RouterPort'
 	local port = assert(shared:get(key), 'cant find RouterPort from dictionary.')
-	cluster.router.port = port
+	cluster.router.port, cluster.router.pid = string.match(port, '^(%d+)/(%d+)')
 	cluster.worker_initiated = port ~= nil
 	success_initialized(route, channel)
 end
@@ -169,19 +177,20 @@ local automatic_initializer = function(route, channel, options)
 		local shared, key = route.shared, 'ngx_cc.'..channel..'.RouterPort'
 		local port = shared:get(key)
 		if port then
-			cluster.router.port = port
-		elseif shared:add(key, worker.port) then
-			cluster.router.port = worker.port
+			cluster.router.port, cluster.router.pid = string.match(port, '^(%d+)/(%d+)')
+		elseif shared:add(key, (worker.port .. '/' .. worker.pid)) then
+			cluster.router.port, cluster.router.pid = worker.port, worker.pid
 		else
-			cluster.router.port = shared:get(key)
+			port = assert(shared:get(key), 'cant access router port from dictionary') -- again
+			cluster.router.port, cluster.router.pid = string.match(port, '^(%d+)/(%d+)')
 		end
 
 		-- master setting
-		local installed, process = pcall(function(mod) return require(mod) end, 'process') -- try load 'process' module
-		if not installed then
-		 	process = require('module.procfs_process') -- load 'procfs_process' again
+		local ps = require('lib.posix')
+		local function is_valid_workerprocess(pid)
+			return ps.pgid(tonumber(pid)) == tonumber(master.pid)  -- pgid is '-1' or pid of master process
 		end
-		master.pid = process:getppid(worker.pid)
+		master.pid = tostring(ps.ppid(tonumber(worker.pid)))
 		for port in string.gmatch(arg.lsof or '', "n[^:]+:(%d+) ?") do
 			if (port ~= '433') and (port ~= worker.port) then
 				master.port = port
@@ -200,10 +209,17 @@ local automatic_initializer = function(route, channel, options)
 			end
 		end
 
-		-- current worker is initialized, and register me on master
+		-- current worker is initialized
 		--	PORT/channel_name/invoke?registerWorker=xxx
 		cluster.worker_initiated = true
-		route.cc('/_/invoke', { direction='master', args={registerWorker=worker.port} })
+		if cluster.router.pid ~= worker.pid then -- router port&pid check, promise 'master' direction valid
+			if ((cluster.router.port == worker.port) or -- new worker process reopen at old port, old pid invalid
+				(not is_valid_workerprocess(cluster.router.pid))) then -- router worker process crush or exit
+				cluster.router.port, cluster.router.pid = worker.port, worker.pid -- set me only
+				-- shared:set(key, (worker.port .. '/' .. worker.pid)) -- register me as RouterPort delay, @see n4cDistrbutionTaskNode.lua module in ngx_4c
+			end
+		end
+		route.cc('/_/invoke', { direction='master', args={registerWorker=worker.port, pid=worker.pid} })
 
 		-- report me as client
 		--	SUPER:PORT/channel_name/invoke?reportClient=xxx

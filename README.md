@@ -28,7 +28,6 @@ The contents of current document:
 Requirements:
 * nginx + lua
 * per-worker-listener patch, a update version included (original version from Roman Arutyunyan)
-* lua-process module (macosx only)
 
 Optional:
 * require ngx_tasks by heartbeat module, from:
@@ -48,11 +47,8 @@ need install/apply these patchs before compile nginx+lua, see:
 > /patchs/run.sh
 
 please read the script, apply patchs and compile/rebuild nginx.
-#### 3) install lua-process module
-if run ngx_cc on MacOSX(procfs is unsupported), then you need install the module. see: 
-> [https://github.com/mah0x211/lua-process](https://github.com/mah0x211/lua-process)
 
-#### 4) test in the nginx environment
+#### 3) test in the nginx environment
 write a ngxin.conf, and put to home of current user:
 ```conf
 ##
@@ -118,6 +114,7 @@ and test it:
 > curl http://127.0.0.1/kada/hub?showMe
 Hi, Welcome to the ngx_cc cluster!
 ```
+
 ## build cluster configures
 This is base demo for a simple cluster.
 
@@ -321,7 +318,6 @@ nginx.conf          -- (demo nginx.conf)
 > cd module/
 > ls
 ngx_cc_core.lua     -- core module, load by ngx_cc.lua
-procfs_process.lua  -- support process:ppid(), get parent_pid of current process
 heartbeat.lua       -- (heartbeat module, optional)
 invoke.lua          -- (getServiceStat action, optional)
 invalid.lua         -- (cluster invalid check, optional)
@@ -331,6 +327,7 @@ invalid.lua         -- (cluster invalid check, optional)
 JSON.lua            -- JSON format output, dependency by getServiceStat action.
 ngx_tasks.lua       -- tasks management, dependency by ngx_cc.tasks interface, a example in module/heartbeat.lua
 Valider.lua         -- invalid rate check, dependency by module/invalid.lua
+posix.lua			-- a minimum posix system module
 
 > cd ../patch
 > ls
@@ -657,6 +654,13 @@ end
 another, a real case in module/invoke.lua.
 ## History
 ```text
+2015.11.03	release v2.1.0, publish NGX_CC node as N4C resources
+	- supported N4C resource management (setting "n4c_supported" in ngx_cc.lua) and high performance node list access
+	- supported N4C distribution node management
+	- supported master/worker process crash check and dynamic restore
+	- procfs_process.lua removed, get parent_pid by LuaJIT now
+	- status check is safe&correct by HTTP_SUCCESS()
+
 2015.08.13	release v2.0.0, support NGX_4C programming architecture
 	- single shared dictionary multi channels
 	- custom headers when pass_proxy or ngx.location.capture (require NGX_4C framework)

@@ -5,8 +5,8 @@ local function apply(invoke)
 		return node.host .. ':' .. (node.port or '80')
 	end
 
-	-- get services status (with clients deep discovery)
-	--	/channel_name/invoke?getServiceStat
+	-- get services status (with/without clients deep discovery)
+	--	/channel_name/invoke?getServiceStat&selfOnly=1
 	invoke.getServiceStat = function(route, channel, arg)
 		local clients
 		if not arg.selfOnly then
@@ -26,10 +26,15 @@ local function apply(invoke)
 
 		local key_registed_workers = 'ngx_cc.'..channel..'.registed.workers'
 		local shared, cluster = route.shared, route.cluster
+		local get_ports = function(registedWorkers) 
+			local ports = {}
+			for port in string.gmatch(registedWorkers, '(%d+)[^,]*,?') do table.insert(ports, port) end
+			return table.concat(ports, ',')
+		end
 		ngx.say(JSON.encode({
 			super = (not route.isRoot()) and HOST(cluster.super) or nil,
 			service = HOST(cluster.master),
-			ports = shared:get(key_registed_workers),
+			ports = get_ports(shared:get(key_registed_workers)),
 			routePort = cluster.router.port,
 			clients = clients
 		}))

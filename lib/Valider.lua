@@ -1,5 +1,5 @@
 -----------------------------------------------------------------------------
--- Valider class v1.1
+-- Valider class v1.1.1
 -- Author: aimingoo@wandoujia.com
 -- Copyright (c) 2015.06
 --
@@ -12,6 +12,7 @@
 --	isInvalid = checker:invalid(key, isContinuous)
 --
 -- History:
+--	2015.10.29	release v1.1.1, update testcases
 --	2015.08.12	release v1.1, rewirte invalid() without queue, publish on github
 --	2015.08.11	release v1.0.1, full testcases
 --	2015.03		release v1.0.0

@@ -13,13 +13,22 @@ local function apply(invoke)
 		local port, t = arg.invalidWorker, arg.t or false
 		if checker:invalid(channel..'.localhost:'..port, t) then
 			local shared, key_registed_workers = route.shared, 'ngx_cc.'..channel..'.registed.workers'
-			local workers, registedWorkers = {}, shared:get(key_registed_workers)
-			for p in string.gmatch(registedWorkers, "(%d+),?") do
+			local workers, ports, registedWorkers = {}, {}, shared:get(key_registed_workers)
+			for worker in string.gmatch(registedWorkers, "([^,]+),?") do
+				local p, pid = string.match(worker, '^(%d+)/(%d+)')
 				if p ~= port then
-					table.insert(workers, p)
+					table.insert(ports, p)
+					table.insert(workers, worker)
 				end
 			end
 			shared:set(key_registed_workers, table.concat(workers, ','))
+
+			-- @see n4cDistrbutionTaskNode.lua module, internal_node_notify() in in ngx_4c
+			local prefix, sender, opt = '/n4c/resource_query/', script_processor.pool, nil
+			local function ADDR(port) return 'http://' .. route.cluster.master.host .. ':' .. tostring(port) end
+			for port in ipairs(ports) do
+				ngx_cc.remote(ADDR(port)..prefix..key_registed_workers, opt)
+			end
 		end
 	end
 
