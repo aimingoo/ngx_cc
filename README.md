@@ -655,9 +655,9 @@ another, a real case in module/invoke.lua.
 ## History
 ```text
 2015.11.03	release v2.1.0, publish NGX_CC node as N4C resources
-	- supported N4C resource management (setting "n4c_supported" in ngx_cc.lua) and high performance node list access
-	- supported N4C distribution node management
-	- supported master/worker process crash check and dynamic restore
+	- support N4C resource management(setting "n4c_supported" in ngx_cc.lua) and high performance node list access
+	- support N4C distribution node management
+	- support master/worker process crash check and dynamic restore
 	- procfs_process.lua removed, get parent_pid by LuaJIT now
 	- status check is safe&correct by HTTP_SUCCESS()
 
