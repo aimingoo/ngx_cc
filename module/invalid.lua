@@ -22,13 +22,7 @@ local function apply(invoke)
 				end
 			end
 			shared:set(key_registed_workers, table.concat(workers, ','))
-
-			-- @see n4cDistrbutionTaskNode.lua module, internal_node_notify() in in ngx_4c
-			local prefix, sender, opt = '/n4c/resource_query/', script_processor.pool, nil
-			local function ADDR(port) return 'http://' .. route.cluster.master.host .. ':' .. tostring(port) end
-			for port in ipairs(ports) do
-				ngx_cc.remote(ADDR(port)..prefix..key_registed_workers, opt)
-			end
+			ngx.ctx.invalidWorker = arg.invalidWorker -- check by n4cDistrbutionTaskNode.lua module in n4c
 		end
 	end
 
@@ -46,6 +40,7 @@ local function apply(invoke)
 				end
 			end
 			shared:set(key_registed_clients, table.concat(clients, ','))
+			ngx.ctx.invalidClient = arg.invalidClient -- check by n4cDistrbutionTaskNode.lua module in n4c
 		end
 	end
 

@@ -21,6 +21,7 @@
 --	ngx_cc.channels
 --
 -- History:
+--	2015.11.04	release v2.1.1, channel_resources as native resource management
 --	2015.10.22	release v2.1.0, publish NGX_CC node as N4C resources
 --	2015.08.13	release v2.0.0, support NGX_4C programming architecture
 --	2015.02		release v1.0.0
@@ -40,9 +41,10 @@ local HTTP_SUCCESS = function(status)
 	return status >= 200 and status < 300
 end
 
--- route framework
-local n4c_supported = false
+-- resource management
 local channel_resources = {}
+
+-- route framework
 local R = {
 	tasks = {},
 	channels = {},
@@ -473,41 +475,36 @@ function R.invokes(channel, master_only)
 	-- ngx.log(ngx.INFO, table.concat({'', channel, ngx.var.cc_host, ngx.var.cc_port, ''}, '||'))
 end
 
--- for n4c architecture
-if n4c_supported then
-	-- for n4c only, removing in init_worker.lua
-	R.resources = channel_resources
-else
-	-- reosure getter for native ngx_cc, direct read shared dictionary
-	-- 	*) saving iterator of worker/clients direction, uses unpack(iterator) to got values by caller
-	local registed_keys = {}
-	setmetatable(channel_resources, {__index = function(t, key)
-		local channel, direction = unpack(registed_keys[key] or {false})
-		if channel == false then
-			local ngx_cc_registed_key = '^ngx_cc%.([^%.]+)%.registed%.([^%.]+)$'
-			channel, direction = string.match(key, ngx_cc_registed_key)
-			registed_keys[key] = {channel, direction}
-		end
+-- reosure getter for native ngx_cc, direct read shared dictionary
+-- 	*) saving iterator of worker/clients direction, uses unpack(iterator) to got values by caller
+local registed_keys = {}
+setmetatable(channel_resources, {__index = function(t, key)
+	local channel, direction = unpack(registed_keys[key] or {false})
+	if channel == false then
+		local ngx_cc_registed_key = '^ngx_cc%.([^%.]+)%.registed%.([^%.]+)$'
+		channel, direction = string.match(key, ngx_cc_registed_key)
+		registed_keys[key] = {channel, direction}
+	end
 
-		local instance = channel and direction and R.channels[channel]
-		if instance and (direction == 'workers' or direction == 'clients') then
-			local registed, newValue = instance.shared:get(key), {}
-			if direction == 'workers' then
-				for port in string.gmatch(registed, '(%d+)[^,]*,?') do table.insert(newValue, port) end
-			elseif direction == 'clients' then
-				for host, port in string.gmatch(registed, '([^:,]+)([^,]*),?') do table.insert(newValue, {host, port}) end
-			end
-			return newValue
+	local instance = channel and direction and R.channels[channel]
+	if instance and (direction == 'workers' or direction == 'clients') then
+		local registed, newValue = instance.shared:get(key), {}
+		if direction == 'workers' then
+			for port in string.gmatch(registed, '(%d+)[^,]*,?') do table.insert(newValue, port) end
+		elseif direction == 'clients' then
+			for host, port in string.gmatch(registed, '([^:,]+)([^,]*),?') do table.insert(newValue, {host, port}) end
 		end
-	end})
-end
+		return newValue
+	end
+end})
 
 -- base struct for multi-workers sub-system
 R.cluster = {
 	super =  { host='127.0.0.1', port='80' },	-- cc:super
 	master = { host='127.0.0.1' },				-- cc:workers, use <master.host> and communication in workes only
 	dict = 'ngxcc_dict',						-- default cluster/global dictionry name
-	-- report_clients = false,						-- non implement
+	report_clients = false,						-- false only, non implement now
+	resources = channel_resources,				-- for n4c architecture, removing in init_worker.lua
 }
 -- current worker
 R.cluster.worker = {

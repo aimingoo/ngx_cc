@@ -654,7 +654,11 @@ end
 another, a real case in module/invoke.lua.
 ## History
 ```text
-2015.11.03	release v2.1.0, publish NGX_CC node as N4C resources
+2015.11.04	release v2.1.1, channel_resources as native resource management
+	- n4c_supported tag removed in ngx_cc.lua
+	- n4c dependency removed in module/invalid.lua
+
+2015.10.22	release v2.1.0, publish NGX_CC node as N4C resources
 	- support N4C resource management(setting "n4c_supported" in ngx_cc.lua) and high performance node list access
 	- support N4C distribution node management
 	- support master/worker process crash check and dynamic restore
