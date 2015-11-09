@@ -1,5 +1,5 @@
 -----------------------------------------------------------------------------
--- NGX_CC v2.1.0
+-- NGX_CC v2.1.1
 -- Author: aimingoo@wandoujia.com
 -- Copyright (c) 2015.02-2015.10
 -- Descition:　a framework of Nginx Communication Cluster. reliable
@@ -48,6 +48,7 @@ local channel_resources = {}
 local R = {
 	tasks = {},
 	channels = {},
+	resources = channel_resources,	-- for n4c architecture, removing in init_worker.lua
 
 	-- the options:
 	--	host 		: current nginx host ip, default is inherited from ngx_cc.cluster.master.host, or '127.0.0.1'
@@ -504,7 +505,6 @@ R.cluster = {
 	master = { host='127.0.0.1' },				-- cc:workers, use <master.host> and communication in workes only
 	dict = 'ngxcc_dict',						-- default cluster/global dictionry name
 	report_clients = false,						-- false only, non implement now
-	resources = channel_resources,				-- for n4c architecture, removing in init_worker.lua
 }
 -- current worker
 R.cluster.worker = {
