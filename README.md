@@ -1,56 +1,77 @@
 # ngx_cc
+
 A framework of Nginx Communication Cluster. reliable distranslation messages in nginx nodes and processes.
 
 The chinese intro document at here: [chinese wiki](https://github.com/aimingoo/ngx_cc/wiki/%E7%AE%80%E4%BB%8B).
 
 The framework support:
+
 > * communication between cluster nodes and worker processes, with directions: super/clients, master/workers
+>   
 > * native ngx.location.capture* based, support coroutine sub-request
->  * without cosocket (not dependent)
+>   
+>   * without cosocket (not dependent)
+>   
 > * multi channels and sub-channels supported
+>   
 > * multi-root or cross-cluster communication supported
+>   
 > * full support NGX_4C programming architecture
->	* http://github.com/aimingoo/ngx_4c
+>   
+>   ``` 
+>   * http://github.com/aimingoo/ngx_4c
+>   ```
 
 The contents of current document:
+
 > * [environment](#environment)
 > * [run testcase with ngx_cc](#run-testcase-with-ngx_cc)
 > * [build cluster configures](#build-cluster-configures)
 > * [programming](#programming-with-ngx_cc)
 > * [APIs](#apis)
->  * [modules in the framework](#modules-in-the-framework)
->  * [locations in nginx.conf](#locations-in-nginxconf)
->  * [ngx_cc APIs](#ngx_cc-apis)
->  * [route APIs](#route-apis)
+>   * [modules in the framework](#modules-in-the-framework)
+>   * [locations in nginx.conf](#locations-in-nginxconf)
+>   * [ngx_cc APIs](#ngx_cc-apis)
+>   * [route APIs](#route-apis)
 > * [History and update](#history)
 
 ## environment
+
 Requirements:
+
 * nginx + lua
 * per-worker-listener patch, a update version included (original version from Roman Arutyunyan)
 
 Optional:
+
 * require ngx_tasks by heartbeat module, from:
- * http://github.com/aimingoo/ngx_tasks
+  * http://github.com/aimingoo/ngx_tasks
 * require Valider by invalid module, from:
- * http://github.com/aimingoo/Valider
+  * http://github.com/aimingoo/Valider
 * require JSON by simple/standard invoke module, from:
- * http://regex.info/blog/lua/json
+  * http://regex.info/blog/lua/json
 
 all optional module saved to ngx_cc/lib/*, by default.
+
 #### 1) install nginx+lua
+
 OpenResty is recommend([here](http://openresty.org/))，or install nginx+lua, see:
+
 > [http://wiki.nginx.org/HttpLuaModule#Installation](http://wiki.nginx.org/HttpLuaModule#Installation)
 
 #### 2) install per-worker-listener patch
+
 need install/apply these patchs before compile nginx+lua, see:
+
 > /patchs/run.sh
 
 please read the script, apply patchs and compile/rebuild nginx.
 
 #### 3) test in the nginx environment
+
 write a ngxin.conf, and put to home of current user:
-```conf
+
+``` conf
 ##
 ## vi ~/nginx.conf
 ##
@@ -75,13 +96,17 @@ http {
     }
 }
 ```
+
 Ok. now start nginx and run testcase:
-```bash
+
+``` bash
 > sudo sbin/nginx -c ~/nginx.conf
 > for port in 80 {8010..8013}; do curl "http://127.0.0.1:$port/test"; done
 ```
+
 if success, output(pid changeable):
-```
+
+``` 
 pid: 24017, port: 80    Okay.
 pid: 24016, port: 8010  Okay.
 pid: 24017, port: 8011  Okay.
@@ -90,8 +115,10 @@ pid: 24019, port: 8013  Okay.
 ```
 
 ## run testcase with ngx_cc
+
 download ngx_cc:
-```bash
+
+``` bash
 > cd ~
 > git clone https://github.com/aimingoo/ngx_cc
 
@@ -103,23 +130,31 @@ download ngx_cc:
 > mv ngx_cc/ngx_cc-master/* ngx_cc/
 > rm -rf ngx_cc/ngx_cc-master
 ```
+
 run nginx with prefix parament:
-```bash
+
+``` bash
 > # cd home directory of nginx
 > sudo ./sbin/nginx -c ~/ngx_cc/nginx.conf -p ~/ngx_cc
 ```
+
 and test it:
+
 > curl http://127.0.0.1/test/hub?getServiceStat
+
 {"clients":[],"ports":"8012,8011,8010,8013","routePort":"8011","service":"127.0.0.1:80"}
+
 > curl http://127.0.0.1/kada/hub?showMe
+
 Hi, Welcome to the ngx_cc cluster!
-```
+
+``` 
 
 ## build cluster configures
 This is base demo for a simple cluster.
 
 1) clone demo configures and change it
-```bash
+​```bash
 # clone configures
 > cp ~/work/ngx_cc/nginx.conf ~/work/ngx_cc/nginx.conf.1
 > cp ~/work/ngx_cc/nginx.conf ~/work/ngx_cc/nginx.conf.2
@@ -138,14 +173,17 @@ This is base demo for a simple cluster.
 ```
 
 2) run instances
-```bash
+
+``` bash
 > sudo ./nginx -c ~/work/ngx_cc/nginx.conf.1 -p ~/ngx_cc
 > sudo ./nginx -c ~/work/ngx_cc/nginx.conf.2 -p ~/ngx_cc
 ```
+
 OK, now, you will get a cluster with next topology: [here](https://github.com/aimingoo/ngx_cc/wiki/images/cluster_arch_4.png)
 
 3) and, more changes(clients for a client)
-```bash
+
+``` bash
 # clone configures
 > cp ~/work/ngx_cc/nginx.conf ~/work/ngx_cc/nginx.conf.11
 
@@ -163,13 +201,16 @@ OK, now, you will get a cluster with next topology: [here](https://github.com/ai
 ngx_cc = require('ngx_cc')
 ngx_cc.cluster.super = { host='127.0.0.1', port='90' }
 ```
+
 4) run instance with nginx.conf.11
-```bash
+
+``` bash
 > sudo ./nginx -c ~/work/ngx_cc/nginx.conf.11
 ```
 
 5) print server list
-```bash
+
+``` bash
 > curl -s 'http://127.0.0.1/test/hub?getServiceStat' | python -m json.tool
 {
     "clients": {
@@ -201,13 +242,18 @@ ngx_cc.cluster.super = { host='127.0.0.1', port='90' }
     "service": "127.0.0.1:80"
 }
 ```
+
 check error.log in $(nginx)/logs to get more 'ALERT' information about initialization processes.
+
 ## programming with ngx_cc
+
 #### 1) insert locations into your nginx.conf
+
 you need change your nginx.conf base demo configures, the demo in $(ngx_cc)/nginx.conf.
 
 and, insert three locations into your nginx.conf:
-```conf
+
+``` conf
 http {
 	...
 
@@ -239,7 +285,8 @@ http {
 ```
 
 #### 2) add shared dictionary in your nginx.conf
-```conf
+
+``` conf
 http {
 	...
 
@@ -250,14 +297,18 @@ http {
 ```
 
 #### 3) initialization ngx_cc in init_worker.lua
+
 configures of &lt;init_worker_by_lua_file&gt; in your nginx.conf:
-```conf
+
+``` conf
 http {
 	...
 	init_worker_by_lua_file '<your_projet_directory>/init_worker.lua';
 ```
+
 and coding in init_worker.lua:
-```lua
+
+``` lua
 -- get ngx_cc instance
 ngx_cc = require('ngx_cc')
 
@@ -269,9 +320,12 @@ require('module.invoke').apply(route)  -- it's default module
 require('module.heartbeat').apply(route) -- it's heartbeat module
 require('module.YOURMODULE').apply(route) -- your modules
 ```
+
 #### 4) write invokes in modules/*
+
 write your invokes and put into $(ngx_cc)/modules/&lt;YOURMODULE&gt;.lua:
-```lua
+
+``` lua
 -- a demo invoke module
 local function apply(invoke)
 	invoke.XXXX = function(route, channel, arg)
@@ -289,90 +343,130 @@ return {
 ```
 
 #### 5) test your invokes
-```bash
+
+``` bash
 # run nginx with your nginx.conf, and call the test:
 > curl 'http://127.0.0.1/test/invoke?XXXX
 ```
+
 ## APIs
 
 There are published APIs of ngx_cc. The &lt;ngx_cc&gt; and &lt;route &gt; APIs for these intances/variants:
-```lua
---
--- (in init_workers.lua)
---
+
+## ```lua
+
+## -- (in init_workers.lua)
 
 -- get ngx_cc instance
+
 ngx_cc = require('ngx_cc')
 
 -- get route instance for 'test' channel
+
 route = ngx_cc:new('test')	-- work with 'test' channel
-```
+
+``` 
 ### modules in the framework
 ```
+
 > cd ~/ngx_cc/
+> 
 > ls
+
 ngx_cc.lua          -- main module
+
 init_worker.lua     -- (demo init_worker.lua)
+
 nginx.conf          -- (demo nginx.conf)
 
 > cd module/
+> 
 > ls
+
 ngx_cc_core.lua     -- core module, load by ngx_cc.lua
+
 heartbeat.lua       -- (heartbeat module, optional)
+
 invoke.lua          -- (getServiceStat action, optional)
+
 invalid.lua         -- (cluster invalid check, optional)
 
 > cd ../lib/
+> 
 > ls
+
 JSON.lua            -- JSON format output, dependency by getServiceStat action.
+
 ngx_tasks.lua       -- tasks management, dependency by ngx_cc.tasks interface, a example in module/heartbeat.lua
+
 Valider.lua         -- invalid rate check, dependency by module/invalid.lua
+
 posix.lua			-- a minimum posix system module
 
 > cd ../patch
+> 
 > ls
+
 per-worker.patch      -- 'per_worker' directive in nginx.conf
+
 ngx-worker-port.patch -- 'ngx.worker.port()' api in ngx_lua
+
 run.sh                -- a demo launch
-```
+
+``` 
 
 ### locations in nginx.conf
 these locations in nginx.conf:
-```conf
+​```conf
 		location ~ ^/([^/]+)/cast
 		location ~ ^/([^/]+)/invoke
 		location ~ ^/([^/]+)/hub
 ```
+
 The regexp:
+
 > ^/([^/]+)
 
 will match channel_name of your request/api accesses. ex:
-```bash
+
+``` bash
 > curl 'http://127.0.0.1/test/invoke?XXXX
 ```
+
 OR
-```lua
+
+``` lua
 -- lua code
 route.cc('/test/invoke?XXXX', { direction = 'workers' })
 ```
+
 for these cases, the channel_name is 'test'.
 
 ##### 1) location: /channel_name/cast
+
 it's internal sub-request of ngx_cc. don't access it in your program. if you want boardcast messages, need call route.cast() from your code.
+
 ##### 2) location: /channel_name/invoke
+
 it's main sub-request, access with route.cc() is commented. and you can seed http request from client(or anywhere):
-```bash
+
+``` bash
 > curl 'http://127.0.0.1/test/invoke?XXXX 
 ```
+
 the 'XXXX' is &lt;action_name&gt; invoked at &lt;channel_name&gt;.
 
 '/channel_name/invoke' will launch single worker process to answer request, it's unicast.
+
 ##### 3) location: /channel_name/hub
+
 it's warp of '/channel_name/invoke' location.
 
 the '/channel_name/hub' will launch 'router process' to answer request. the router is unique elected process by all workers.
+
 ### ngx_cc APIs
-```
+
+``` 
 # internal
 ngx_cc.tasks         : default tasks, drive by tasks management module/plugins, see module/heartbeat.lua or ngx_tasks project.
 ngx_cc.channels      : channel list
@@ -393,14 +487,18 @@ ngx_cc.all()         : batch communication request, call and return once, ngx.th
 ```
 
 ###### >> ngx_cc:new
+
 > function ngx_cc:new(channel, options)
 
 try get a route instance workat 'test' channel, and with default options:
-```lua
+
+``` lua
 route = ngx_cc:new('test')
 ```
+
 the default options is:
-```lua
+
+``` lua
 options = {
     host = '127.0.0.1',
     port = '80',
@@ -408,23 +506,31 @@ options = {
     initializer = 'automatic'
 }
 ```
+
 you can put custom options, ex:
-```lua
+
+``` lua
 route = ngx_cc:new('test', { port = '90' })
 ```
 
 ###### >> ngx_cc.say
+
 > function ngx_cc.say(r_status, r_resps)
 
 print/write context into current http responses with a route.cc() communication:
-```lua
+
+``` lua
 ngx_cc.say(route.cc('/_/invoke'))
 ```
+
 for 'workers'/'clients' direction, will output all response body of success communication.
 
 ###### >> ngx_cc.self and ngx_cc.remote
+
 > function ngx_cc.self(url, opt)
+
 >
+
 > function ngx_cc.remote(url, opt)
 
 ngx_cc.self() will send a sub-request from current request context. it's warp of ngx.location.capture*, with same interface of route.cc().
@@ -432,29 +538,35 @@ ngx_cc.self() will send a sub-request from current request context. it's warp of
 ngx_cc.remote() will send a rpc(remote process call). so, the full remote url is required for 'url' parament.
 
 > ngx_cc.self/remote is **none channel dependency**, so you can call them without communication channel.
+> 
 > ngx_cc.self() unsupport '_' replacement symbol, but route.self() is supported.
 
 ###### >> ngx_cc.transfer
+
 > function ngx_cc.transfer(super, channels, clients)
 
-```
+``` 
 paraments:
 	super    - string, 'HOST:PORT'
 	channels - string, 'channelName1,channelName2,...', or '*'
 	clients  - string, 'ip1,ip2,ip3,...', or '*'
 ```
+
 Transfer these **clients** to new **super** at these **channels**. the api will rewrite clients register table in shared dictionary, and send transfer command to these **clients**.
 
 **clients** will invoke the command and transfer himself.
 
 ###### >> ngx_cc.all
+
 > function ngx_cc.all(requests, comment)  -- comment is log only
 
 ngx_cc.all() will batch send all requests. the request define:
+
 > { cc_command, arg1, arg2, ... }
 
 so, you can push any command/call, ex:
-```lua
+
+``` lua
 local reuests = {}
 table.insert(reuests, {ngx_cc.remote, 'a_url', a_option_table})
 table.insert(reuests, {ngx_cc.all, request2})
@@ -463,11 +575,14 @@ table.insert(reuests, {route.cc, 'a_url', a_option_table})
 local ok, resps = ngx_cc.all(reuests)
 ngx_cc.say(ok, resps)
 ```
+
 ###### >> ngx_cc.invokes
+
 > function ngx_cc.invokes(channel, master_only)
 
 will call from localtions in nginx.conf only:
-```conf
+
+``` conf
 # invoke at worker listen port
 location ~ ^/([^/]+)/invoke {
     content_by_lua 'ngx_cc.invokes(ngx.var[1])';
@@ -480,32 +595,39 @@ location ~ ^/([^/]+)/hub {
 ```
 
 ###### >> ngx_cc.optionAgain and ngx_cc.optionAgain2
-> function ngx_cc.optionAgain(direction, opt)
 
+> function ngx_cc.optionAgain(direction, opt)
+> 
 > function ngx_cc.optionAgain2(direction, opt, force_mix_into_current)
 
 the 'opt' parament see: options of [ngx.location.capture*](http://wiki.nginx.org/HttpLuaModule#ngx.location.capture)
 
 the 'direction' parament is string(will copy to opt.direction):
-```lua
+
+``` lua
 --  'super'  : 1:1  send to super node, the super is parent node.
 --  'master' : 1:1  send to router process from any worker
 --  'workers': 1:*  send to all workers
 --  'clients': 1:*  send to all clients
 ```
+
 Usage:
+
 > * function ngx_cc.optionAgain()
 > * function ngx_cc.optionAgain('direction')
 > * function ngx_cc.optionAgain(direction_object)
 > * function ngx_cc.optionAgain(direction_object, opt)
 
  examples:
-```lua
+
+``` lua
 -- case 1
 route.cc('/_/invoke', ngx_cc.optionAgain())
 ```
+
 will return default option object:
-```lua
+
+``` lua
 default_opt = {
     direction = 'master',  -- default
     method = ngx.req.get_method(),
@@ -513,25 +635,31 @@ default_opt = {
     body   = ngx.req.get_body_data()
 }
 ```
+
 and,
-```lua
+
+``` lua
 -- case 2
 route.cc('/_/invoke', ngx_cc.optionAgain('clients'))
 ```
+
 will return default option object, but opt.direction is 'clients'.
 
-```lua
+``` lua
 -- case 3
 ngx_cc.optionAgain({
     direction = 'super',
     body = ''
 })
 ```
+
 will mix these options
+
 * { direction = 'super', body = '' }
 
 into default option object.
-```lua
+
+``` lua
 -- case 4
 ngx_cc.optionAgain({
     direction = 'super',
@@ -544,10 +672,12 @@ ngx_cc.optionAgain({
     body = ''
 })
 ```
+
 will get mixed options beetwen direction_object and opt, but default_option_object is ignored.
 
 ### route APIs
-```
+
+``` 
 # internal
 route.cluster        : cluster infomation for current worker process
 
@@ -568,22 +698,27 @@ route.isInvokeAtMaster() : utility，check master/router node for current, and f
 route.isInvokeAtPer() : utility，check current is worker node, and force communication invoke at 'workers'
 route.transfer()      : override ngx_cc.transfer(), transfer current worker only.
 ```
-###### >> route.cc and route.cast
-> function route.cc(url, opt)
 
+###### >> route.cc and route.cast
+
+> function route.cc(url, opt)
+> 
 > function route.cast(url, opt)
 
 the 'url' parament include pattens:
-```
+
+``` 
 '/_/invoke'           : a action invoking, the action_name setting in options
 '/_/invoke/ding'      : a remote call with uri '/ding'
 '/_/cast/ding'        : a remote call with uri '/ding', and target service will boardcast the message.
 '/_/_/test/invokeXXX' : a sub-channel 'XXX' invoke at 'test' channel
 ```
+
 the 'opt' parament see: [ngx_cc.optionAgain](https://github.com/aimingoo/ngx_cc/blob/master/README.md#-ngx_ccoptionagain-and-ngx_ccoptionagain2)
 
 if you want send 'AAA' as action_name for all 'workers', the communication implement by these codes:
-```lua
+
+``` lua
 route.cc('/_/invoke', {
 	direction = 'workers',
 	args = { AAA = true }
@@ -593,14 +728,17 @@ route.cc('/_/invoke', {
 
 route.cc('/_/invoke?AAA', { direction = 'workers' })
 ```
+
 and, if you want copy all from current request context(ngx.vars/ctx/body...), ex:
-```lua
+
+``` lua
 route.cc('/_/invoke?AAA', ngx_cc.optionAgain('workers'))
 ```
 
 ###### >> route.self and route.remote
-> function route.self(url, opt)
 
+> function route.self(url, opt)
+> 
 > function route.remote(url, opt)
 
 route.self() will send a sub-request from current request context. it's warp of ngx.location.capture*, with same interface of route.cc().
@@ -608,24 +746,30 @@ route.self() will send a sub-request from current request context. it's warp of 
 route.remote() will send a rpc(remote process call). so, the full remote url is required for 'url' parament.
 
 ###### >> route.isRoot()
+
 > function route.isRoot()
 
 check root node for current process. equivlant to:
-> * cluster.master.host == cluster.super.host
 
-> and
+> * cluster.master.host == cluster.super.host
+>   
+>   and
+>   
 > * cluster.master.port == cluster.super.port
 
 if current is root node, then route.cc() with "direction = 'super'" will ignored, and return:
+
 > * r_status, r_resps = true, {}
 
 ###### >> route.isInvokeAtMaster()
+
 > function route.isInvokeAtMaster()
 
 if current is master, then isInvokeAtMaster() return true only. else, will return false and re-send current request to real master/route node.
 
 the function will force invoke at 'master/router' of current communication always. there is simple example, try it in your invoke code:
-```lua
+
+``` lua
 route.invoke.XXX = function()
 	local no_redirected, r_status, r_resps = route.isInvokeAtMaster()
 	if no_redirected then
@@ -635,13 +779,16 @@ route.invoke.XXX = function()
 	end
 end
 ```
+
 ###### >> route.isInvokeAtPer()
+
 > function route.isInvokeAtPer()
 
 if current worker is listen at per-worker port, then isInvokeAtPer() return true only. else, will return false and re-send current request to real all per-workers.
 
 the function will force invoke at 'workers' of current communication always. so will try request for per-workers, **and** process same action by per-worker. there is simple example, try it in your invoke code:
-```lua
+
+``` lua
 route.invoke.XXX = function()
 	local no_redirected, r_status, r_resps = route.isInvokeAtPer()
 	if no_redirected then
@@ -651,9 +798,14 @@ route.invoke.XXX = function()
 	end
 end
 ```
+
 another, a real case in module/invoke.lua.
+
 ## History
-```text
+
+``` text
+2016.01.13	release v2.1.2, minor bug fix, thanks for stone-wind, he is 1st reporter of the project.
+
 2015.11.04	release v2.1.1, channel_resources as native resource management
 	- n4c_supported tag removed in ngx_cc.lua
 	- n4c dependency removed in module/invalid.lua

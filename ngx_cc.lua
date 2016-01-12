@@ -431,8 +431,8 @@ function R.transfer(super, channels, clients)
 	local forAll, requests, opt = isEmpty(clients), {}, { args={transferServer=super} }
 	for channel in pairs(channels) do
 		local saved, instance, key_registed_clients = {}, R.channels[channel], 'ngx_cc.'..channel..'.registed.clients'
-		local iterator = channel_resources[key_registed_clients] or {}
-		for client, port in unpack(iterator) do
+		local registed_clients = channel_resources[key_registed_clients] or {}
+		for client, port in ipairs(registed_clients) do
 			if forAll or clients[client] then
 				table.insert(requests, {instance.remote, 'http://'..client..port..'/'..channel..'/invoke', opt})
 			else
@@ -490,10 +490,12 @@ setmetatable(channel_resources, {__index = function(t, key)
 	local instance = channel and direction and R.channels[channel]
 	if instance and (direction == 'workers' or direction == 'clients') then
 		local registed, newValue = instance.shared:get(key), {}
-		if direction == 'workers' then
-			for port in string.gmatch(registed, '(%d+)[^,]*,?') do table.insert(newValue, port) end
-		elseif direction == 'clients' then
-			for host, port in string.gmatch(registed, '([^:,]+)([^,]*),?') do table.insert(newValue, {host, port}) end
+		if registed then
+			if direction == 'workers' then
+				for port in string.gmatch(registed, '(%d+)[^,]*,?') do table.insert(newValue, port) end
+			elseif direction == 'clients' then
+				for host, port in string.gmatch(registed, '([^:,]+)([^,]*),?') do table.insert(newValue, {host, port}) end
+			end
 		end
 		return newValue
 	end

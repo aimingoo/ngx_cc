@@ -1,4 +1,4 @@
-local JSON = require('lib.JSON')
+local JSON = require('cjson')
 
 local function apply(invoke)
 	local function HOST(node)
@@ -24,6 +24,8 @@ local function apply(invoke)
 			end
 		end
 
+		-- NOTE: cant access 'channel_resources[]', so direct read shared dictionary
+		--	@see: reosure getter for native ngx_cc in ngx_cc.lua
 		local key_registed_workers = 'ngx_cc.'..channel..'.registed.workers'
 		local shared, cluster = route.shared, route.cluster
 		local get_ports = function(registedWorkers) 
