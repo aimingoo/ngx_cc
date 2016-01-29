@@ -7,7 +7,7 @@
 --
 -- Usage:
 --	ngx_cc = require('ngx_cc')
---	rotue = ngx_cc:new('kada')	-- work with 'kada' channel
+--	route = ngx_cc:new('kada')	-- work with 'kada' channel
 --	route.cc('/kada/invoke', 'master')
 --	  ..
 -- instance methods:
