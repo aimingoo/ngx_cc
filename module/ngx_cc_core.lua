@@ -162,7 +162,7 @@ local automatic_initializer = function(route, channel, options)
 
 	-- fake a requestSelf_BASH(), and direct call route.invoke.setWorker
 	local function requestSelf_DIRECT(action)
-		pcall(route.invoke.setWorker, rotue, channel, { lsof = LSOF_LINES() })
+		pcall(route.invoke.setWorker, route, channel, { lsof = LSOF_LINES() })
 	end
 
 	-- /channel_name/invoke?setWorker&lsof=p14739%20n*:80%20n*:8080
